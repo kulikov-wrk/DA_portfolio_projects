@@ -1,0 +1,635 @@
+---
+title: "Exploratory data analysis of Gothic Teaser survey"
+output:
+  html_document:
+    df_print: paged
+---
+
+Steam publication link https://steamcommunity.com/app/950670/discussions/0/1742267854809566431, link for data in Google Drive https://drive.google.com/drive/folders/1QJYZJsKn3ttbA8g5Lr-15XOHZFHEqu5S
+
+*Case information*
+All Steam users with any Gothic game in the were given a chance to play Gothic Teaser for new version of the game for free. Developers asked players to answer a survey about their game experience.
+
+Goal is to get familiar with data and prepare file for following analysis.
+
+# Starting part
+
+Packages
+```{r}
+require(tidyverse) # main data manipulation package
+require(psych)     # for descriptive statistics
+require(ggpubr)    # plots tuning
+require(readxl)    # for reading data from excel files
+require(writexl)   # for writing data as excel file
+```
+
+Loading data set and it's shape
+```{r}
+df_raw <- read_excel("./data/Gothic_survey/Gothic (pt) Survey (Responses)_FINAL.xlsx") # data frame for raw data
+dim(df_raw)
+```
+
+Data frame structure
+```{r}
+glimpse(df_raw)
+```
+
+Spaces, question marks, '/' with '-'  and loooong question would be annoying to deal with. Also, column name '24', is suspicious.
+```{r}
+df_wrk <- df_raw # new data frame for editing
+colnames(df_wrk) <- str_replace_all(colnames(df_wrk), c("[ ?/-]" = "."))
+df_wrk <- df_wrk %>%
+  rename("Continue.development" = "Based.on.what.you.have.played.in.Gothic.Playable.Teaser:.Would.you.want.us.to.continue.the.development.and.release.it.as.a.full.game.")
+colnames(df_wrk)
+```
+
+Table preview
+```{r}
+bind_rows(head(df_wrk, 5), tail(df_wrk, 5))
+```
+
+Except column '24', can't see any problems yet. But Timestamp imported as character
+```{r}
+df_wrk <- df_wrk %>%
+  mutate(Timestamp = as.POSIXct(Timestamp, format = "%m %d %Y %H:%M:%S")) 
+```
+
+Is there NA's?
+```{r}
+data.frame(colSums(is.na(df_wrk))) %>%
+  rename("n" = "colSums.is.na.df_wrk..") %>%
+  arrange(desc(n))
+```
+
+All data in column '24' is NA's. I don't need the column for analysis.
+```{r}
+df_wrk <- df_wrk %>%
+  select(!'...24')
+```
+
+Very small amount of NA's for the table with 43 k rows. Where are they?
+```{r}
+df_wrk[!complete.cases(df_wrk), ]
+```
+
+NA's are in the very first rows. Leave them for now.
+
+# Looking on data
+
+## Survey dates
+```{r}
+paste("First answer sent", min(df_wrk$Timestamp), ", last answer - ", max(df_wrk$Timestamp), ", it took took around ", paste(round(max(df_wrk$Timestamp) - min(df_wrk$Timestamp))), " days to recive all  answers.", sep = "")
+```
+
+Answers recieving dynamic
+```{r}
+survey_dates <- date(df_wrk$Timestamp)
+df_survey_dates <- survey_dates<- data.frame(table(survey_dates)) %>%
+  mutate(survey_dates = as.Date(survey_dates))
+
+rm(survey_dates) # clear memory
+df_survey_dates
+```
+
+As a plot
+```{r}
+ggplot(df_survey_dates, 
+       aes(x = survey_dates, y = Freq)) +
+  geom_line(linewidth = 1) +
+  theme_light() +
+  labs(title = "Динамика получения ответов", x = "Недели", y = "Количество ответов") +
+  theme(axis.text.x = element_text(angle = 45, vjust = 0.5)) +
+  scale_x_date(breaks = "week")
+```
+
+Only one peak with declining after it.
+```{r}
+df_survey_dates %>%
+  filter(Freq > 1000)
+```
+
+Peak amount of received answers per day was at 7th day after start of the survey. After the peak daily answers number drops to 1000 and below.
+Пиковое количество ответов пришлось на 7 день сбора ответов, после него за неделю количество ежедневных ответов падает ниже 1000 и продолжает снижаться. 
+
+## Sample age
+
+```{r}
+count(df_wrk, What.is.your.age.)
+```
+
+146 participants said that they do not want to answer. "Dec 16" is quite puzzling, but don't give any useful information. Would remove them from representation.
+```{r}
+age_flt <- c("Dec 16", "Dont want to answer", NA) # filter for removing
+paste("Applied filter woul remove ", nrow(df_wrk) - sum(!df_wrk$What.is.your.age. %in% age_flt), " from ", nrow(df_wrk), " answers: ", round(sum(df_wrk$What.is.your.age. %in% age_flt) / nrow(df_wrk) * 100, digits = 2), "%", sep = "")
+```
+
+Age by groups
+```{r}
+df_ages <- count(df_wrk, What.is.your.age.) 
+
+df_ages
+```
+
+As a plot
+```{r}
+ggbarplot(df_ages, "What.is.your.age.", "n", fill = "darkgray", color = FALSE) + 
+  labs(x = "Age", y = "Participants") +
+  theme_light()
+```
+
+Biggest group - from 22 to 27 y.o., 2nd place - 28-35, 3rd - 17-21.
+
+# Gaming experience
+
+## Favoirte genres
+
+Can I visualize it without data wrangling?
+```{r}
+length(unique(df_wrk$What.are.your.favorite.genres.))
+```
+
+Too many answers to deal with.
+```{r}
+df_wrk$What.are.your.favorite.genres.[1:20]
+```
+
+Split by ", "
+```{r}
+# looks like there vere some problems with symbols
+genres <- trimws(unlist(str_split(tolower(
+  iconv(df_wrk$What.are.your.favorite.genres., "UTF-8", "UTF-8", sub = '')), ", ") 
+  ))
+
+df_genres <- data.frame(table(genres))
+rm(genres) # don't need large vector any more
+
+df_genres <- df_genres %>%
+  arrange(desc(Freq)) %>%
+  filter(Freq > 500) %>%
+  mutate(genres = as.character(genres))
+
+df_genres
+```
+
+As a plot
+```{r}
+ggbarplot(df_genres, "genres", "Freq", 
+          fill = "darkgray", color = FALSE, orientation = "horiz", 
+          order = rev(df_genres$genres)) + 
+  labs(x = NULL, y = "Participants") +
+  theme_light()
+```
+The most popular answer is RPG, after 4th place only answers from less than 1k participants
+
+## Games/game series
+
+```{r}
+length(unique(df_wrk$Which.of.these.other.games.game.series.have.you.played.))
+df_wrk$Which.of.these.other.games.game.series.have.you.played.[1:10]
+```
+
+More than 4,8 k unique answers, again splitting by ", "
+```{r}
+games_series <- trimws(unlist(str_split(tolower(
+  iconv(df_wrk$Which.of.these.other.games.game.series.have.you.played., "UTF-8", "UTF-8", sub = '')), ", ") 
+  ))
+df_games_series <- data.frame(table(games_series))
+rm(games_series)
+
+df_games_series <- df_games_series %>%
+  arrange(desc(Freq)) %>% 
+  filter(Freq > 1000)
+df_games_series
+```
+
+As a plot
+```{r}
+ggbarplot(df_games_series, "games_series", "Freq",
+          fill = "darkgray", color = FALSE, orientation = "horiz", 
+          order = rev(df_games_series$games_series)) + 
+  labs(x = NULL, y = "Participants") +
+  theme_light()
+```
+
+After For Honor (13178 mentions) there are not games mentioned more than 1 k times.
+В топе указанных игр/игровых серий в основном вариации РПГ.
+
+## Gaming platforms
+```{r}
+unique(df_wrk$On.which.platforms.do.you.play.games.)
+```
+
+There are no need to split answers. Would remove NA after calculation.
+```{r}
+df_platforms <- count(df_wrk, On.which.platforms.do.you.play.games., sort = TRUE)
+
+df_platforms[1:7, ]
+```
+
+Less than 20 answers would look non-informative on the plot
+```{r}
+ggbarplot(df_platforms %>%
+            filter(n > 20), "On.which.platforms.do.you.play.games.", "n", 
+          fill = "darkgray", color = FALSE, orientation = "horiz", 
+          order = rev(df_platforms$On.which.platforms.do.you.play.games.)) + 
+  labs(x = NULL, y = "Количество ответов") +
+  theme_light()
+```
+
+Almost 30k of participants play on PC, but the result is obvious, bc survey link published in Steam.т ожидаемый.
+
+# Game experience in Gothic series
+
+## Die-hard fans
+```{r}
+count(df_wrk, Would.you.call.yourself.a.diehard.Gothic.fan.)
+```
+
+As a plot
+```{r}
+ggbarplot(count(df_wrk, Would.you.call.yourself.a.diehard.Gothic.fan.) %>%
+           filter(n > 1),
+          "Would.you.call.yourself.a.diehard.Gothic.fan.", "n",
+          fill = "darkgray", color = FALSE) + 
+  labs(title = "Назовете ли себя хардкорным фанатом Готики?", x = NULL, y = "Количество ответов") +
+  scale_x_discrete(labels = c("Нет", "Да")) +
+  geom_text(aes(label = n), vjust = 3) +
+  theme_light()
+```
+
+## What Gothic games participants have played?
+
+As a table
+```{r}
+df_gothic_games <- count(df_wrk, What.Gothic.games.have.you.played.) %>%
+  arrange(desc(n)) %>%
+  filter(n > 1)
+df_gothic_games
+```
+
+As a plot
+```{r}
+ggbarplot(df_gothic_games, "What.Gothic.games.have.you.played.", "n",
+          fill = "darkgray", color = FALSE, orientation = "horiz", 
+          order = rev(df_gothic_games$What.Gothic.games.have.you.played.)) + 
+  labs(title = "В какие части серии играли", x = NULL, y = "Количество ответов") +
+  theme_light()
+```
+
+More than 35k have played in all 3 parts of Gothic.
+
+## Favorite game of the series
+As a table
+```{r}
+df_favorit_gothic <- count(df_wrk, What.was.your.favorite.Gothic.game.) %>%
+  filter(n > 1) %>%
+  arrange(desc(n))
+df_favorit_gothic
+```
+
+Options for the question are quite questionable.
+```{r}
+ggbarplot(df_favorit_gothic, "What.was.your.favorite.Gothic.game.", "n",
+          fill = "darkgray", color = FALSE, 
+          order = rev(df_favorit_gothic$What.was.your.favorite.Gothic.game.)) + 
+  labs(title = "Favorite game", x = NULL, y = "Participants") +
+  theme_light() + 
+  coord_flip()
+```
+
+3rd game has lowest result.
+
+# Gothic Playable Teaser experience
+## Visual
+
+```{r}
+df_wrk %>%
+  count(Please.rate.the.visuals.in.the.Gothic.Playable.Teaser) %>%
+  left_join(df_wrk %>% 
+           count(Please.rate.the.animations.in.the.Gothic.Playable.Teaser), 
+           by = c("Please.rate.the.visuals.in.the.Gothic.Playable.Teaser" =  "Please.rate.the.animations.in.the.Gothic.Playable.Teaser")) %>%
+  rename(rating = Please.rate.the.visuals.in.the.Gothic.Playable.Teaser, 
+         visuals = n.x, animations = n.y
+         )
+```
+
+Frequency of scores between 6 and 10 is puzzling
+```{r}
+df_wrk %>%
+  filter(Please.rate.the.visuals.in.the.Gothic.Playable.Teaser > 5,
+         Please.rate.the.animations.in.the.Gothic.Playable.Teaser > 5)
+```
+
+Where can I find them?
+```{r}
+head(df_wrk) %>%
+  select(Timestamp, 
+         Please.rate.the.visuals.in.the.Gothic.Playable.Teaser, 
+         Please.rate.the.animations.in.the.Gothic.Playable.Teaser)
+```
+
+Outliers found in the first 3 rows of the table, filled from the start to the end of data collection. I suppose, that at first they used scale from 1 to 10, but changed it without deleting the answers.
+Scores higher than 5 would be filtered from results.
+```{r}
+df_visual <- df_wrk %>%
+  count(Please.rate.the.visuals.in.the.Gothic.Playable.Teaser) %>%
+  left_join(df_wrk %>% 
+           count(Please.rate.the.animations.in.the.Gothic.Playable.Teaser), 
+           by = c("Please.rate.the.visuals.in.the.Gothic.Playable.Teaser" =  "Please.rate.the.animations.in.the.Gothic.Playable.Teaser")) %>%
+  rename(rating = Please.rate.the.visuals.in.the.Gothic.Playable.Teaser, visuals = n.x, animations = n.y) %>%
+  filter(rating < 6)
+
+df_visual
+```
+
+As a plot
+```{r}
+p_visual <- ggbarplot(df_visual, "rating", "visuals", fill = "darkgray", color = FALSE) + 
+  labs(x = "Визуал", y = "Количество ответов") +
+  theme_light() +
+  ylim(0, 20000)
+p_animation <- ggbarplot(df_visual, "rating", "animations", fill = "darkgray", color = FALSE) + 
+  labs(x = "Анимация", y = NULL) +
+  theme_light() +
+  theme(axis.text.y=element_blank(), 
+      axis.ticks.y=element_blank()) +
+  ylim(0, 20000)
+
+ggarrange(p_visual, p_animation)
+```
+
+## Sound
+As a table
+```{r}
+df_sound <- df_wrk %>%
+  count(Please.rate.the.sound.in.the.Gothic.Playable.Teaser) %>%
+  left_join(count(df_wrk, Please.rate.the.music.in.the.Gothic.Playable.Teaser), 
+            by = c("Please.rate.the.sound.in.the.Gothic.Playable.Teaser" = 
+                     "Please.rate.the.music.in.the.Gothic.Playable.Teaser")) %>%
+  left_join(count(df_wrk, Please.rate.the.English.VO.in.the.Gothic.Playable.Teaser),
+            by = c("Please.rate.the.sound.in.the.Gothic.Playable.Teaser" =
+                     "Please.rate.the.English.VO.in.the.Gothic.Playable.Teaser")) %>%
+  rename(rating = Please.rate.the.sound.in.the.Gothic.Playable.Teaser, 
+        sound = n.x, music = n.y, VO = n)
+
+df_sound
+```
+
+As a plot
+```{r}
+p_sound <- ggbarplot(df_sound, "rating", "sound", fill = "darkgray", color = FALSE) + 
+  labs(x = "Звук", y = "Количество ответов") +
+  theme_light()  +
+  ylim(0, 20000)
+p_music <- ggbarplot(df_sound, "rating", "music", fill = "darkgray", color = FALSE) + 
+  labs(x = "Музыка", y = NULL) +
+  theme_light()  +
+  ylim(0, 20000)
+p_VO <- ggbarplot(df_sound, "rating", "VO", fill = "darkgray", color = FALSE) + 
+  labs(x = "Озвучка", y = NULL) +
+  theme_light()  +
+  ylim(0, 20000)
+
+ggarrange(p_sound, p_music, p_VO, ncol = 3)
+```
+
+## Interface in general
+As table
+```{r}
+df_interface <- df_wrk %>%
+  count(Please.rate.the.controls.in.the.Gothic.Playable.Teaser) %>%
+  left_join(count(df_wrk, Please.rate.the.combat.system.in.the.Gothic.Playable.Teaser), 
+            by = c("Please.rate.the.controls.in.the.Gothic.Playable.Teaser" = 
+                     "Please.rate.the.combat.system.in.the.Gothic.Playable.Teaser")) %>%
+  left_join(count(df_wrk, Please.rate.the.user.interface.in.the.Gothic.Playable.Teaser),
+            by = c("Please.rate.the.controls.in.the.Gothic.Playable.Teaser" =
+                     "Please.rate.the.user.interface.in.the.Gothic.Playable.Teaser")) %>%
+  rename(rating = Please.rate.the.controls.in.the.Gothic.Playable.Teaser, 
+        control = n.x, combat = n.y, interface = n)
+
+df_interface
+```
+
+As a plot
+```{r}
+p_control <- ggbarplot(df_interface, "rating", "control", fill = "darkgray", color = FALSE) + 
+  labs(x = "Управление", y = "Количество ответов") +
+  theme_light()  +
+  ylim(0, 20000)
+p_combat <- ggbarplot(df_interface, "rating", "combat", fill = "darkgray", color = FALSE) + 
+  labs(x = "Боевое", y = NULL) +
+  theme_light()  +
+  ylim(0, 20000)
+p_interface <- ggbarplot(df_interface, "rating", "interface", fill = "darkgray", color = FALSE) + 
+  labs(x = "Интерфейс", y = NULL) +
+  theme_light()  +
+  ylim(0, 20000)
+
+ggarrange(p_control, p_combat, p_interface, ncol = 3)
+```
+
+## Gothic Playable Teaser overoll score
+```{r}
+unique(df_wrk$What.overall.score.would.you.give.the.Gothic.Playable.Teaser.)
+```
+
+Unique answers looks like miss management of the question. Ideal answer would be a score between 0 and 100, but there are a lot of "messy" values.
+Ways to deal with it:
+
+* remove all values longer than 2 symbols
+* replace 0+ to 5 (bc smallest step is 5) and also repeat 1st variant
+* replace below n to n-1 and calculate median for answers with more than 1 numeric values.
+
+To choose best variant will save all 3 of them
+
+answers with 2 symbols -
+```{r}
+df_wrk %>%
+  select(What.overall.score.would.you.give.the.Gothic.Playable.Teaser.) %>%
+  filter(str_length(What.overall.score.would.you.give.the.Gothic.Playable.Teaser.) < 3) %>%
+  count(.)
+```
+
+```{r}
+cat("Answers with more than 2 symbols: ", nrow(df_wrk) - 36021, "\n", "Removing them would delete ", round(((nrow(df_wrk) - 36021)/nrow(df_wrk)) * 100, 2), "% of data from ", nrow(df_wrk), sep = "")
+```
+"Cleanest" answers (with 2 numeric symbols)
+```{r}
+scores0 <- unlist(df_wrk %>%
+  select(What.overall.score.would.you.give.the.Gothic.Playable.Teaser.) %>%
+  filter(str_length(What.overall.score.would.you.give.the.Gothic.Playable.Teaser.) < 3) %>%
+  mutate(What.overall.score.would.you.give.the.Gothic.Playable.Teaser. =
+           as.numeric(What.overall.score.would.you.give.the.Gothic.Playable.Teaser.)))
+
+describe(unlist(scores0))
+```
+
+Replacing 0+.
+```{r}
+scores1 <- unlist(df_wrk %>%
+  select(What.overall.score.would.you.give.the.Gothic.Playable.Teaser.) %>%
+  rename(overall_score1 = What.overall.score.would.you.give.the.Gothic.Playable.Teaser.) %>%
+  mutate(overall_score1 =
+           str_replace_all(overall_score1, "0\\+", "5")) %>%
+  filter(str_length(overall_score1) < 3) %>%
+  mutate(overall_score1 = as.numeric(overall_score1)))
+
+describe(scores1)
+```
+
+```{r}
+cat("Answers with more than 2 symbols after replacing '0+': ", nrow(df_wrk) - 39420, "\n", "Removing them would delete ", round(((nrow(df_wrk) - 39420)/nrow(df_wrk)) * 100, 2), "% of data from ", nrow(df_wrk), sep = "")
+```
+
+Preparations to work with whole column. Answer '???? 30' looks similar to 'Below 30', but it's only one answer and replacing it to median could be better variant.
+```{r}
+df_wrk$What.overall.score.would.you.give.the.Gothic.Playable.Teaser.[df_wrk$What.overall.score.would.you.give.the.Gothic.Playable.Teaser. == "???? 30"] <- 50
+sum(is.na(df_wrk$What.overall.score.would.you.give.the.Gothic.Playable.Teaser.))
+```
+
+Starting replace 0+
+```{r}
+scores2 <- unlist(df_wrk %>%
+  select(What.overall.score.would.you.give.the.Gothic.Playable.Teaser.)  %>%
+  rename(overall_score2 = What.overall.score.would.you.give.the.Gothic.Playable.Teaser.) %>%
+  mutate(overall_score2 = str_replace_all(overall_score2, "0\\+", "5")))
+
+unique(scores2)
+```
+
+How to work with answers 'Below x'?
+```{r}
+unique(scores2[str_starts(scores2, "Below")])
+```
+
+"Below" appears only as "Below 30", will change it to 25
+
+```{r}
+scores2 <- str_replace(scores2, "Below 30", "25")
+
+unique(unlist(scores2))
+```
+
+Replace multiple values with median
+```{r}
+# defining variables
+mask_len3 <- str_length(scores2) > 2 
+to_change <- scores2[mask_len3]
+res <- c() 
+  
+# calculate median for values with more than 2 symbols
+for (i in 1:length(to_change)) {
+    v1 <- unlist(str_split(to_change[i], ", "))
+    res[i] <- median(as.numeric(v1))
+    i <- i + 1
+}
+# replacing values 
+scores2[mask_len3] <- res
+scores2 <- as.numeric(scores2)
+rm(mask_len3, to_change, res, v1, i)
+unique(scores2)
+```
+
+Descriptive statistic to compare 3 different results
+```{r}
+describe(scores0) %>%
+  bind_rows(describe(scores1), describe(scores2)) 
+```
+
+Difference between 1st and 3 variants is almost 7k without essential discrepancies in descriptive parameters (except variability). So full replacement looks like best option.
+
+To ensure let's look at plots
+
+```{r}
+p_score0 <- gghistogram(as_tibble(scores0), x = "value", fill = "darkgray", color = FALSE, bins = 25) + 
+  labs(x = "score0", y = "Количество ответов") +
+  theme_light() +
+  ylim(0, 7000) +
+  xlim(0, 100)
+p_score1 <- gghistogram(as_tibble(scores1), x = "value", fill = "darkgray", color = FALSE, bins = 25) + 
+  labs(x = "score1", y = NULL) +
+  theme_light() +
+  ylim(0, 7000) +
+  xlim(0, 100)
+p_score2 <- gghistogram(as_tibble(scores2), x = "value", fill = "darkgray", color = FALSE, bins = 25) + 
+  labs(x = "score2", y = NULL) +
+  theme_light() +
+  ylim(0, 7000) +
+  xlim(0, 100)
+
+suppressWarnings(ggarrange(p_score0, p_score1, p_score2, ncol = 3)) # to remove warnings about NA
+```
+
+# Opinions about Gothic Playable Teaser
+
+Would participants support continuing of development?
+```{r}
+count(df_wrk, Continue.development)
+```
+
+What do they want to see as next game?
+```{r}
+length(unique(df_wrk$What.do.you.like.to.see.as.next.Gothic.game.))
+```
+
+And the answers with highest mentions are
+```{r}
+count(df_wrk, What.do.you.like.to.see.as.next.Gothic.game., sort = TRUE) %>%
+  filter(n > 50)
+```
+
+Do they like reinterpretation of the plot?
+```{r}
+count(df_wrk, How.did.you.like.the.approach.to.re.interpret.the.plot., sort = TRUE)
+```
+
+Saving top of the original data for using as questions reference later.
+```{r}
+write.csv(head(df_raw[, 1:23]), "./data/Gothic_survey/gothic_head.csv", row.names = FALSE)
+```
+
+Columns names to rename
+```{r}
+colnames(df_raw)
+```
+
+New columns names
+```{r}
+new_names <- c(
+  'timestamp',
+  'age',
+  'gamer_type',
+  'gothic_games_played',
+  'games_played',
+  'fav_genres',
+  'gaming_platforms',
+  'teaser_device',
+  'teaser_finished',
+  'visuals',
+  'animations',
+  'sound',
+  'music',
+  'controls',
+  'combat_system',
+  'interpretation_approach',
+  'next_game',
+  'diehard_fan',
+  'fav_gothic',
+  'VO',
+  'overall_score',
+  'continue_development',
+  'ui'
+)
+colnames(df_wrk) <- new_names
+```
+
+Replacing overall scores in df_wrk
+```{r}
+df_wrk$overall_score <- scores2
+```
+
+Saving file, prepared for analysis.
+```{r}
+# write_csv(df_wrk[complete.cases(df_wrk), ], "gothic_data.csv") # file size is almost excel x3 
+write_xlsx(df_wrk[complete.cases(df_wrk), ], "./data/Gothic_survey/gothic_data.xlsx")
+```
