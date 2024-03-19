@@ -10,6 +10,6 @@
 2. ABC-XYZ анализ (данные онлайн-поставщиков за 2011 год)
 - ABCXYZ_Excel.xlsx
 
-4. Дашборд в PowerBI (расходы на таргет и продажи)
+3. Дашборд в PowerBI (расходы на таргет и продажи)
 - PowerBI_data_model.png
 - PowerBI_report.pdf
