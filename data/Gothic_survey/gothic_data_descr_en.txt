@@ -1,0 +1,67 @@
+Gothic Playable Teaser survey case files
+---------------------------------------------------------------------------
+
+Results published on Steam https://steamcommunity.com/app/950670/discussions/0/1742267854809566431. 
+Source of data
+https://drive.google.com/drive/folders/1QJYZJsKn3ttbA8g5Lr-15XOHZFHEqu5S
+
+---------------------------------------------------------------------------
+
+Gothic (pt) Survey (Responses)_FINAL.xlsx  
+
+### Original file with survey results
+
+Questions/columns:
+    Timestamp
+    What is your age?
+    What type of gamer do you consider yourself? 
+    What Gothic games have you played? 
+    Which of these other games/game series have you played?
+    What are your favorite genres?
+    On which platforms do you play games?
+    How did you play Gothic Playable Teaser?
+    Have you finished Gothic Playable Teaser?
+    Please rate the visuals in the Gothic Playable Teaser
+    Please rate the animations in the Gothic Playable Teaser
+    Please rate the sound in the Gothic Playable Teaser
+    Please rate the music in the Gothic Playable Teaser
+    Please rate the controls in the Gothic Playable Teaser
+    Please rate the combat system in the Gothic Playable Teaser
+    How did you like the approach to re-interpret the plot?
+    What do you like to see as next Gothic game?
+    Would you call yourself a diehard Gothic fan?
+    What was your favorite Gothic game?
+    Please rate the English VO in the Gothic Playable Teaser 
+
+gothic_data.xlsx
+
+### File with surevey resulets, prepared for following analysis
+    
+Questions/columns:
+    timestamp,
+    age,
+    gamer_type,
+    gothic_games_played,
+    games_played,
+    fav_genres,
+    gaming_platforms,
+    teaser_device,
+    teaser_finished,
+    visuals,
+    animations,
+    sound,
+    music,
+    controls,
+    combat_system,
+    interpretation_approach,
+    next_game,
+    diehard_fan,
+    fav_gothic,
+    VO,
+    overall_score,
+    continue_development,
+    ui
+
+gothic_head.csv
+
+### File with first 6 rows from Gothic (pt) Survey (Responses)_FINAL.xlsx
