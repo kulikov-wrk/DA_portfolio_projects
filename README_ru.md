@@ -13,3 +13,7 @@
 3. Дашборд в PowerBI (расходы на таргет и продажи)
 - PowerBI_data_model.png
 - PowerBI_report.pdf
+
+4. Работа с PostgreSQL
+-  PostgreSQL_analysis.sql
+-  PostgreSQL_анализ_.sql
