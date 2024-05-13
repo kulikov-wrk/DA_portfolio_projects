@@ -17,7 +17,7 @@ select
 	*,
 	case 
 		when t2.n_session_growth = 0 
-			OR t2.n_session_growth = NULL  then 0
+			or t2.n_session_growth = NULL  then 0
 		else round(t2.n_sessions / (t2.n_sessions - t2.n_session_growth) , 2) - 1
 	end as pct_session_growth
 from (-- Amount of sessions by year and month, change to previous month
@@ -28,8 +28,10 @@ from (-- Amount of sessions by year and month, change to previous month
 				select 
 					to_char(s.session_date_time, 'YY-MM') as session_yy_mm,
 					count(*) as n_sessions
-				from sessions s
-				group by to_char(s.session_date_time, 'YY-MM')
+				from 
+					sessions s
+				group by 
+					to_char(s.session_date_time, 'YY-MM')
 			) t1
 	) t2
 
@@ -42,12 +44,15 @@ select
 from (-- ID mentee from users list with 0 sessions
 		select 
 			user_id
-		from users u 
-		where u.role = 'mentee'
+		from 
+			users u 
+		where 
+			u.role = 'mentee'
 		except 
 		select 
 			distinct (s.mentee_id)
-		from sessions s 
+		from 
+			sessions s 
 	) t
 union all
 select
@@ -56,12 +61,15 @@ select
 from (-- ID mentros from users list with 0 sessions 
 		select 
 			user_id
-		from users u 
-		where u.role = 'mentor'
+		from 
+			users u 
+		where 
+			u.role = 'mentor'
 		except 
 		select 
 			distinct (s.mentor_id)
-		from sessions s 
+		from 
+			sessions s 
 	) t
 
 /* All mentors have been at least at 1 session, but 662 mentee with 0 sessions to date
@@ -93,8 +101,12 @@ from (-- number of sessions by mentor, month, week
 				to_char(s.session_date_time, 'YY-MM'),
 				to_char(s.session_date_time, 'w')
 	) t1
-group by t1.mentor_id, t1.yy_mm
-order by t1.mentor_id, t1.yy_mm
+group by 
+	t1.mentor_id, 
+	t1.yy_mm
+order by 
+	t1.mentor_id, 
+	t1.yy_mm
 
 -- 03.2 Changes in sessions numbers from month to month
 
@@ -108,8 +120,10 @@ from ( -- number of sessions by mentor, month and week
 			s.mentor_id, 
 			to_char(s.session_date_time, 'w') as wk,
 			count(*) as n_sessions
-		from sessions s 
-		where s.session_status = 'finished'
+		from 
+			sessions s 
+		where 
+			s.session_status = 'finished'
 		group by 
 			s.mentor_id, 
 			to_char(s.session_date_time, 'YY-MM'), 
@@ -118,8 +132,12 @@ from ( -- number of sessions by mentor, month and week
 			s.mentor_id, 
 			to_char(s.session_date_time, 'YY-MM')
 	) t1 
-group by t1.mentor_id, t1.yy_mm
-order by t1.yy_mm, t1.mentor_id
+group by 
+	t1.mentor_id, 
+		t1.yy_mm
+order by 
+	t1.yy_mm, 
+		t1.mentor_id
 
 -- 03.3 Top-5 mentors by number of sessions for the last full month 
 
@@ -130,8 +148,10 @@ from sessions s
 where 
 	to_char(s.session_date_time, 'YY-MM-DD') > '22-07-31'
 	and to_char(s.session_date_time, 'YY-MM-DD') < '22-09-01'
-group by s.mentor_id
-order by  count(*) desc
+group by 
+	s.mentor_id
+order by  
+	count(*) desc
 limit 5
 
 --------------------------------------------------------------------------------------------------------------------------
@@ -150,8 +170,10 @@ from (-- difference between sessions by mentee
 					s.mentor_id ,
 					lag(s.session_date_time) over(partition by s.mentor_id order by s.session_date_time) as lg_date,
 					s.session_date_time
-				from sessions s
-				order by s.mentor_id
+				from 
+					sessions s
+				order by 
+					s.mentor_id
 			) t1
 		) t2
 group by t2.mentor_id
@@ -170,11 +192,14 @@ from (--
 					s.mentee_id ,
 					lag(s.session_date_time) over(partition by s.mentee_id order by s.session_date_time) as lg_date,
 					s.session_date_time
-				from sessions s
-				order by s.mentee_id
+				from 	
+					sessions s
+				order by 
+					s.mentee_id
 			) t1
-		)t2
-group by t2.mentee_id
+		) t2
+group by 
+	t2.mentee_id
 
 --------------------------------------------------------------------------------------------------------------------------
 -- 05 Session cancelling problem 
@@ -190,14 +215,17 @@ with canceled_sessions_by_domain as (
 				to_char(s.session_date_time, 'YY-MM') as yy_mm,
 				s.mentor_domain_id,
 				count(*) as n_sessions_canceled
-			from sessions s
-			where s.session_status = 'canceled'
+			from 
+				sessions s
+			where 
+				s.session_status = 'canceled'
 			group by 
 				to_char(s.session_date_time, 'YY-MM'), 
 				s.mentor_domain_id 
 		) t1
 	left join domain d
-	on t1.mentor_domain_id = d.id
+	on 
+		t1.mentor_domain_id = d.id
 	order by 
 		d.name, 
 		t1.yy_mm
@@ -205,8 +233,10 @@ with canceled_sessions_by_domain as (
 select 
 	csbd.name,
 	round(avg(csbd.n_sessions_canceled), 2) as sessions_canceled_avg
-from canceled_sessions_by_domain csbd
-group by csbd.name
+from 
+	canceled_sessions_by_domain csbd
+group by 
+	csbd.name
 
 -- 05.2 How fraction ofcancelled sessions changed by month?
 
@@ -218,26 +248,35 @@ from (
 		select 
 			to_char(s.session_date_time, 'YY-MM') as yy_mm,
 			count(*) as n_canceled
-		from sessions s 
-		where s.session_status = 'canceled'
-		group by to_char(s.session_date_time, 'YY-MM')
-		order by to_char(s.session_date_time, 'YY-MM')
+		from 
+			sessions s 
+		where 
+			s.session_status = 'canceled'
+		group by 
+			to_char(s.session_date_time, 'YY-MM')
+		order by 
+			to_char(s.session_date_time, 'YY-MM')
 		), 
 	sessions_all as(-- Number of sessions by year and month
 		select 
 			to_char(s.session_date_time, 'YY-MM') as yy_mm,
 			count(*) as n_sessions
-		from sessions s 
-		group by to_char(s.session_date_time, 'YY-MM')
-		order by to_char(s.session_date_time, 'YY-MM')
+		from 
+			sessions s 
+		group by 
+			to_char(s.session_date_time, 'YY-MM')
+		order by 
+			to_char(s.session_date_time, 'YY-MM')
 		) 
 	select
 		sa.yy_mm,
 		sc.n_canceled,
 		sa.n_sessions
-	from sessions_all sa	
+	from 
+		sessions_all sa	
 	left join sessions_canceled sc
-	on sa.yy_mm = sc.yy_mm
+	on 
+		sa.yy_mm = sc.yy_mm
 	) t1
 
 --------------------------------------------------------------------------------------------------------------------------
@@ -250,8 +289,10 @@ from sessions s
 where 
 	to_char(s.session_date_time, 'YY-MM-DD') > '22-07-31'
 	and to_char(s.session_date_time, 'YY-MM-DD') < '22-09-01'
-group by to_char(s.session_date_time, 'day')
-order by count(*) desc
+group by 
+	to_char(s.session_date_time, 'day')
+order by 
+	count(*) desc
 	
 -- 06.2 Day of week for every domain with highest number of sessions 
 
@@ -268,10 +309,16 @@ with domain_rush_days as (-- domain id, weekday with highest load, number of ses
 						s.mentor_domain_id,
 						to_char(s.session_date_time, 'day') as weekday,
 						count(*) as n_sessions
-					from sessions s
-					where s.session_status = 'finished'
-					group by s.mentor_domain_id, to_char(s.session_date_time, 'day')
-					order by s.mentor_domain_id, count(*) desc
+					from 
+						sessions s
+					where 
+						s.session_status = 'finished'
+					group by 
+						s.mentor_domain_id, 
+						to_char(s.session_date_time, 'day')
+					order by 
+						s.mentor_domain_id, 
+						count(*) desc
 					) t1 
 		)t2
 	where rn = 1
@@ -280,9 +327,11 @@ select
 	d.name,
 	drd.weekday,
 	drd.n_sessions
-from domain d
+from 
+	domain d
 left join domain_rush_days drd
-on d.id = drd.mentor_domain_id
+on 
+	d.id = drd.mentor_domain_id
 
 --------------------------------------------------------------------------------------------------------------------------
 -- 07. Additional analysis
@@ -305,10 +354,13 @@ select
 	r.name,
 	us.n_users,
 	us.pct_users
-from region r 
+from 
+	region r 
 join users_stat us
-on r.id  = us.region_id
-order by us.n_users desc
+on 
+	r.id  = us.region_id
+order by 
+	us.n_users desc
 limit 10
 
 -- 07.2 Number of mentors by domain
@@ -319,16 +371,21 @@ with mentors_per_domain as (
 			select 
 				s.mentor_domain_id,
 				count(distinct(s.mentor_id)) as n_mentors
-			from sessions s
-			group by s.mentor_domain_id
+			from 
+				sessions s
+			group by 
+				s.mentor_domain_id
 )
 select 
 	d.name, 
 	mpd.n_mentors
-from domain d
+from 
+	domain d
 left join mentors_per_domain mpd
-on d.id = mpd.mentor_domain_id
-order by n_mentors desc
+on 
+	d.id = mpd.mentor_domain_id
+order by 
+	n_mentors desc
 
 -- 07.3 How many sessions scheduled by domain?
 -- Number of sessions for mentee by number of domains
@@ -340,11 +397,15 @@ from (
 		select 
 			s.mentee_id,
 			count(distinct(s.mentor_domain_id)) as n_domains
-		from sessions s 
-		group by s.mentee_id 
+		from 
+			sessions s 
+		group by 
+			s.mentee_id 
 		) t
-group by n_domains
-order by n_domains desc
+group by 
+	n_domains
+order by 
+	n_domains desc
 
 -- Will there be changes for cancelled sessions?
 
@@ -355,12 +416,17 @@ from (
 		select 
 			s.mentee_id,
 			count(distinct(s.mentor_domain_id)) as n_domains
-		from sessions s 
-		where s.session_status = 'canceled'
-		group by s.mentee_id 
+		from 
+			sessions s 
+		where 
+			s.session_status = 'canceled'
+		group by 
+			s.mentee_id 
 		) t
-group by n_domains
-order by n_domains desc
+group by 
+	n_domains
+order by 
+	n_domains desc
 
 /* Highest number of cancelled sessions for mentee with sessions by single domain*/
 
@@ -370,16 +436,22 @@ with canceled_sessions_by_domain as (
 		select 
 			s.mentor_domain_id,
 			count(*) as n_sessions_canceled
-		from sessions s 
-		where s.session_status = 'canceled'
-		group by s.mentor_domain_id
+		from 
+			sessions s 
+		where 
+			s.session_status = 'canceled'
+		group by 
+			s.mentor_domain_id
 		)
 select
 	d.name,
 	csbd.n_sessions_canceled
-from domain d
+from 
+	domain d
 left join canceled_sessions_by_domain csbd
-on d.id = csbd.mentor_domain_id
-order by csbd.n_sessions_canceled desc
+on 
+	d.id = csbd.mentor_domain_id
+order by 
+	csbd.n_sessions_canceled desc
 
 /* Range for cancelled sessions by domain is between 126 and 189 */
