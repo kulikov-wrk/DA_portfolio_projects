@@ -11,7 +11,8 @@ PostgreSQL
 */
 
 --------------------------------------------------------------------------------------------------------------------------
--- 01 Использование платформы: количество запланированных встреч по месяцам + динамика месяц к месяцу
+-- 01 Использование платформы: 
+-- 01.1 Количество запланированных встреч по месяцам + динамика месяц к месяцу
 
 select
 	*,
@@ -28,12 +29,21 @@ from (-- Количество сессий по году-месяцу, изме�
 				select 
 					to_char(s.session_date_time, 'YY-MM') as session_yy_mm,
 					count(*) as n_sessions
-				from 
-					sessions s
-				group by 
-					to_char(s.session_date_time, 'YY-MM')
+				from sessions s
+				group by to_char(s.session_date_time, 'YY-MM')
 			) t1
 	) t2
+
+-- 01.2 Количество уникальных менторов и менти, участвующих во встречах помесячно
+
+select 
+	to_char(s.session_date_time, 'YY-MM') as yy_mm,
+	count(distinct(s.mentor_id)) as n_mentors,
+	count(distinct(s.mentee_id)) as n_mentee
+from 
+	sessions s 
+group by 
+	to_char(s.session_date_time, 'YY-MM')
 
 --------------------------------------------------------------------------------------------------------------------------
 -- 02 Сколько менторов и менти еще не приняли участие ни в 1 встрече?
@@ -44,15 +54,12 @@ select
 from (-- ID менти из списка пользователей, не встречающиеся в сессиях
 		select 
 			user_id
-		from 
-			users u 
-		where 
-			u.role = 'mentee'
+		from users u 
+		where u.role = 'mentee'
 		except 
 		select 
 			distinct (s.mentee_id)
-		from 
-			sessions s 
+		from sessions s 
 	) t
 union all
 select
@@ -61,15 +68,12 @@ select
 from (-- ID менторов из списка пользователей, не встречающиеся в сессиях
 		select 
 			user_id
-		from 
-			users u 
-		where 
-			u.role = 'mentor'
+		from users u 
+		where u.role = 'mentor'
 		except 
 		select 
 			distinct (s.mentor_id)
-		from 
-			sessions s 
+		from sessions s 
 	) t
 
 /* Все менторы участвовали хотя бы в 1 сессии, но 662 менти ни разу не назначили встреч (даже отмененных)
@@ -94,7 +98,8 @@ from (-- количество сессий по ментору, месяцам �
 				s.mentor_id, 
 				to_char(s.session_date_time, 'w') as wk,
 				count(*) as n_sessions
-			from sessions s 
+			from 
+				sessions s 
 			where 
 				s.session_status = 'finished'
 			group by 
@@ -103,11 +108,9 @@ from (-- количество сессий по ментору, месяцам �
 				to_char(s.session_date_time, 'w')
 	) t1
 group by 
-	t1.mentor_id, 
-	t1.yy_mm
+	t1.mentor_id, t1.yy_mm
 order by 
-	t1.mentor_id, 
-	t1.yy_mm
+	t1.mentor_id, t1.yy_mm
 
 -- 03.2 Изменения частоты проведенных сессий от месяца к месяцу
 
@@ -121,10 +124,8 @@ from ( -- количество сессий по ментору, месяцам 
 			s.mentor_id, 
 			to_char(s.session_date_time, 'w') as wk,
 			count(*) as n_sessions
-		from 
-			sessions s 
-		where 
-			s.session_status = 'finished'
+		from sessions s 
+		where s.session_status = 'finished'
 		group by 
 			s.mentor_id, 
 			to_char(s.session_date_time, 'YY-MM'), 
@@ -134,11 +135,9 @@ from ( -- количество сессий по ментору, месяцам 
 			to_char(s.session_date_time, 'YY-MM')
 	) t1 
 group by 
-	t1.mentor_id, 
-	t1.yy_mm
+	t1.mentor_id, t1.yy_mm
 order by 
-	t1.yy_mm, 
-	t1.mentor_id
+	t1.yy_mm, t1.mentor_id
 
 -- 03.3 Топ-5 менторов по количеству сессий за последний полный месяц
 
@@ -149,59 +148,100 @@ from
 	sessions s
 where 
 	to_char(s.session_date_time, 'YY-MM-DD') > '22-07-31'
-	and to_char(s.session_date_time, 'YY-MM-DD') < '22-09-01'
+and to_char(s.session_date_time, 'YY-MM-DD') < '22-09-01'
 group by 
-	s.mentor_id
+	s.mentor_id 
 order by  
 	count(*) desc
-limit 5
+limit 
+	5
+
+/* что у них может быть общего:
+ - направление менторства;
+ - регион;
+ - что-то с датой регистрации.
+ */
+
+select
+	u.user_id,
+	to_char(u.reg_date, 'YY-MM-DD') as reg_date,
+	r."name", 
+	s1."name"
+from users u 
+left join region r 
+on u.region_id = r.id
+left join (
+			select 
+				distinct(s.mentor_id),
+				d."name"
+			from 
+				sessions s
+			left join users u
+			on 
+				s.mentor_id = u.user_id 
+			left join "domain" d 
+			on 
+				s.mentor_domain_id = d.id
+		) s1 
+on u.user_id  = s1.mentor_id 
+where u.user_id in (4256, 2192, 1903, 1552, 1357)
+order by to_char(u.reg_date, 'YY-MM-DD')
+
+-- Может быть у них есть что-то, связанное с менти:
+-- проведение повторных сессий с одними и теми же менти?
+
+select 
+	s.mentor_id,
+	count(*) as n_sessions,
+	count(distinct(s.mentee_id)) as n_mentee
+from sessions s 
+where s.mentor_id in (4256, 2192, 1903, 1552, 1357)
+group by s.mentor_id
+
+-- общие менти?
+select 
+	count(*) as n_sessions,	
+	count(distinct(s.mentee_id)) as n_mentee
+from sessions s 
+where s.mentor_id in (4256, 2192, 1903, 1552, 1357)
+
+/* Гипотезы про менти не подтвердились - почти все менторы проводят сессии с разными менти*/
 
 --------------------------------------------------------------------------------------------------------------------------
 -- 04. "Свободное" время менторов и менти
 -- 04.1 Сколько времени в среднем проходит между менторскими встречами у одного менти? 
 
-select 
-	t2.mentor_id,
-	avg(t2.time_delta)
-from (-- разница между сессиями по менторам
+select
+	avg(age(t1.next_session_date, t1.session_date_time)) as avg_mentee_intersession_interval
+from (-- менти, дата сессии, дата следующей сессии
 		select 
-			t1.mentor_id,
-			age(t1.session_date_time, lg_date) as time_delta
-		from (-- ментии, дата и предыдущая дата
-				select 
-					s.mentor_id ,
-					lag(s.session_date_time) over(partition by s.mentor_id order by s.session_date_time) as lg_date,
-					s.session_date_time
-				from 
-					sessions s
-				order by 
-					s.mentor_id
-			) t1
-		) t2
-group by 
-	t2.mentor_id
+			s.mentee_id,
+			s.session_date_time, 
+			lead(s.session_date_time) over(partition by s.mentee_id order by s.session_date_time) as next_session_date
+		from 
+			sessions s 
+		order by 
+			s.mentee_id, s.session_date_time  
+) t1
+where 
+	t1.next_session_date is not null
 	
 -- 04.2 Ментора?
 
-select 
-	t2.mentee_id,
-	avg(t2.time_delta)
-from (-- разница между 
+select
+	avg(age(t1.next_session_date, t1.session_date_time)) as avg_mentor_intersession_interval
+from (-- ментор, дата сессии, дата следующей сессии
 		select 
-			t1.mentee_id,
-			age(t1.session_date_time, lg_date) as time_delta
-		from (-- ментии, дата и предыдущая дата
-				select 
-					s.mentee_id ,
-					lag(s.session_date_time) over(partition by s.mentee_id order by s.session_date_time) as lg_date,
-					s.session_date_time
-				from 
-					sessions s
-				order by 
-					s.mentee_id
-			) t1
-		)t2
-group by t2.mentee_id
+			s.mentor_id,
+			s.session_date_time, 
+			lead(s.session_date_time) over(partition by s.mentor_id order by s.session_date_time) as next_session_date
+		from 
+			sessions s 
+		order by 
+			s.mentor_id, s.session_date_time  
+) t1
+where 
+	t1.next_session_date is not null
 
 --------------------------------------------------------------------------------------------------------------------------
 -- 05 Проблемы отмены сессий 
@@ -219,7 +259,7 @@ with canceled_sessions_by_domain as (
 				count(*) as n_sessions_canceled
 			from 
 				sessions s
-			where 
+			where 	
 				s.session_status = 'canceled'
 			group by 
 				to_char(s.session_date_time, 'YY-MM'), 
@@ -313,20 +353,13 @@ with domain_rush_days as (-- код направления, самый загр�
 						s.mentor_domain_id,
 						to_char(s.session_date_time, 'day') as weekday,
 						count(*) as n_sessions
-					from 
-						sessions s
-					where 
-						s.session_status = 'finished'
-					group by 
-						s.mentor_domain_id, 
-							to_char(s.session_date_time, 'day')
-					order by 
-						s.mentor_domain_id, 
-						count(*) desc
+					from sessions s
+					where s.session_status = 'finished'
+					group by s.mentor_domain_id, to_char(s.session_date_time, 'day')
+					order by s.mentor_domain_id, count(*) desc
 					) t1 
 		)t2
-	where 
-		rn = 1
+	where rn = 1
 	)
 select 
 	d.name,
@@ -351,8 +384,10 @@ with users_stat as (
 			select 
 				region_id,
 				count(*) as n_users
-			from users u
-			group by region_id
+			from 
+				users u
+			group by 
+				region_id
 		) t
 	)
 select 
@@ -366,7 +401,8 @@ on
 	r.id  = us.region_id
 order by 
 	us.n_users desc
-limit 10
+limit 
+	10
 
 -- 07.2 Количество менторов по направлению
 /*запрос сработает т.к. все менторы проводили сессии, 
@@ -404,13 +440,19 @@ from (
 		select 
 			s.mentee_id,
 			count(distinct(s.mentor_domain_id)) as n_domains
-		from sessions s 
-		group by s.mentee_id 
+		from 
+			sessions s 
+		group by 
+			s.mentee_id 
 		) t
 group by 
 	n_domains
-order by 
+order by 	
 	n_domains desc
+
+select 
+	count(distinct(s.mentee_id))
+from sessions s 
 
 -- Меняется ли это в зависимости от отмены сессии?
 
@@ -458,5 +500,37 @@ on
 	d.id = csbd.mentor_domain_id
 order by 
 	csbd.n_sessions_canceled desc
+	
+-- Количество завершенных сессий по направлению менторства
+
+with finished_sessions_by_domain as (
+		select 
+			s.mentor_domain_id,
+			count(*) as n_sessions_finished
+		from 
+			sessions s 
+		where 
+			s.session_status = 'finished'
+		group by 
+			s.mentor_domain_id
+		)
+select
+	d.name,
+	csbd.n_sessions_finished
+from 
+	domain d
+left join finished_sessions_by_domain csbd
+on 
+	d.id = csbd.mentor_domain_id
+order by 
+	csbd.n_sessions_finished desc
 
 /* разброс количества отменных сессий по направлениям от 126 до 189 */
+	
+select 
+	count(*)
+from sessions s 
+
+select 
+	count(*)
+from users u 
